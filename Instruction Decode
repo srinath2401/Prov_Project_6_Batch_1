@@ -1,1 +1,29 @@
+`timescale 1ns/1ns
 
+module InstructionDecode(
+    input clk, input rst,
+    input [31:0] instruction,
+    output reg [5:0] opcode,
+    output reg [4:0] rs, rt, rd,
+    output reg [15:0] immediate,
+    output reg [5:0] funct
+);
+    
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            opcode <= 0;
+            rs <= 0;
+            rt <= 0;
+            rd <= 0;
+            immediate <= 0;
+            funct <= 0;
+        end else begin
+            opcode <= instruction[31:26];
+            rs <= instruction[25:21];
+            rt <= instruction[20:16];
+            rd <= instruction[15:11];
+            immediate <= instruction[15:0];
+            funct <= instruction[5:0];
+        end
+    end
+endmodule
