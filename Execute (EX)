@@ -1,1 +1,69 @@
+module Execution_Stage (
+    input wire clk, reset,
+    input wire [15:0] rs_data, rt_data, imm, 
+    input wire [3:0] alu_op, 
+    input wire alu_src, 
+    input wire [1:0] forwardA, forwardB,
+    input wire [15:0] alu_result_wb, alu_result_mem,  // Forwarding inputs from WB and MEM stage
+    output reg [15:0] alu_result, 
+    output reg zero_flag, 
+    output reg [15:0] rt_data_out  // Forwarded register value for MEM stage
+);
+    
+    reg [15:0] operand_A, operand_B;
+    
+    // Forwarding MUX for operand A
+    always @(*) begin
+        case (forwardA)
+            2'b00: operand_A = rs_data;           // No forwarding
+            2'b01: operand_A = alu_result_mem;    // Forward from MEM stage
+            2'b10: operand_A = alu_result_wb;     // Forward from WB stage
+            default: operand_A = rs_data;
+        endcase
+    end
 
+    // Forwarding MUX for operand B
+    always @(*) begin
+        case (forwardB)
+            2'b00: operand_B = rt_data;           // No forwarding
+            2'b01: operand_B = alu_result_mem;    // Forward from MEM stage
+            2'b10: operand_B = alu_result_wb;     // Forward from WB stage
+            default: operand_B = rt_data;
+        endcase
+    end
+    
+    // ALU MUX (for Immediate values)
+    always @(*) begin
+        if (alu_src)
+            operand_B = imm;
+    end
+
+    // ALU Operation
+    always @(*) begin
+        case (alu_op)
+            4'b0000: alu_result = operand_A + operand_B;   // ADD
+            4'b0001: alu_result = operand_A - operand_B;   // SUB
+            4'b0010: alu_result = operand_A & operand_B;   // AND
+            4'b0011: alu_result = operand_A | operand_B;   // OR
+            4'b0100: alu_result = operand_A ^ operand_B;   // XOR
+            4'b0101: alu_result = operand_A << 1;          // Shift Left
+            4'b0110: alu_result = operand_A >> 1;          // Shift Right
+            4'b0111: alu_result = (operand_A < operand_B) ? 16'b1 : 16'b0; // SLT
+            default: alu_result = 16'b0;                   // Default case
+        endcase
+    end
+
+    // Zero Flag
+    always @(*) begin
+        zero_flag = (alu_result == 16'b0) ? 1 : 0;
+    end
+
+    // Output the forwarded rt_data for MEM stage
+    always @(posedge clk or posedge reset) begin
+        if (reset)
+            rt_data_out <= 16'b0;
+        else
+            rt_data_out <= rt_data;
+    end
+
+endmodule
