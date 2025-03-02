@@ -1,1 +1,24 @@
+`timescale 1ns/1ns
+
+module WriteBack(
+    input [31:0] ReadData_WB,
+    input [31:0] ALUResult_WB,
+    input [4:0] writereg_WB,
+    input RegWrite_WB,
+    input MemtoReg_WB,
+    output reg [31:0] WriteData,
+    output reg [4:0] WriteReg,
+    output reg RegWrite
+);
+    
+    always @(*) begin
+        if (MemtoReg_WB)
+            WriteData = ReadData_WB; // Load from memory
+        else
+            WriteData = ALUResult_WB; // ALU result
+        
+        WriteReg = writereg_WB;
+        RegWrite = RegWrite_WB;
+    end
+endmodule
 
