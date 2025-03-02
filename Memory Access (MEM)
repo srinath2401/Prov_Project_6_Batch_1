@@ -1,1 +1,31 @@
+`timescale 1ns/1ns
 
+module MemoryStage(
+    input clk,
+    input rst,
+    input MemWrite,
+    input MemRead,
+    input [31:0] ALUResult_M,
+    input [31:0] WriteData_M,
+    output reg [31:0] ReadData_M
+);
+    
+    reg [7:0] data_mem [0:255]; // 8-bit wide, 256 locations
+    
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            ReadData_M <= 0;
+        end else begin
+            if (MemRead) begin
+                ReadData_M <= {data_mem[ALUResult_M], data_mem[ALUResult_M+1], 
+                               data_mem[ALUResult_M+2], data_mem[ALUResult_M+3]};
+            end
+            if (MemWrite) begin
+                data_mem[ALUResult_M] <= WriteData_M[7:0];
+                data_mem[ALUResult_M+1] <= WriteData_M[15:8];
+                data_mem[ALUResult_M+2] <= WriteData_M[23:16];
+                data_mem[ALUResult_M+3] <= WriteData_M[31:24];
+            end
+        end
+    end
+endmodule
