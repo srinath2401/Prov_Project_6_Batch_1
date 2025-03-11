@@ -1,4 +1,4 @@
-module Execution_Stage (
+module EX_MIP (
     input wire clk, reset,
     input wire [15:0] rs_data, rt_data, imm, 
     input wire [3:0] alu_op, 
