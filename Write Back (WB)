@@ -1,6 +1,6 @@
 `timescale 1ns/1ns
 
-module WriteBack(
+module WB_MIP(
     input [31:0] ReadData_WB,
     input [31:0] ALUResult_WB,
     input [4:0] writereg_WB,
@@ -21,4 +21,3 @@ module WriteBack(
         RegWrite = RegWrite_WB;
     end
 endmodule
-
