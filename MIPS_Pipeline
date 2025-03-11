@@ -1,0 +1,179 @@
+`timescale 1ns/1ns
+
+// Hazard Detection Unit
+module Hazard_Detect_MIP(
+    input [4:0] rs_ID, rt_ID, rt_EX,
+    input MemRead_EX,
+    output reg stall
+);
+    always @(*) begin
+        if (MemRead_EX && ((rt_EX == rs_ID) || (rt_EX == rt_ID)))
+            stall = 1;
+        else
+            stall = 0;
+    end
+endmodule
+
+// Forwarding Unit
+module Forwarding_Unit(
+    input [4:0] rs_EX, rt_EX, rd_MEM, rd_WB,
+    input RegWrite_MEM, RegWrite_WB,
+    output reg [1:0] forwardA, forwardB
+);
+    always @(*) begin
+        forwardA = 2'b00;
+        forwardB = 2'b00;
+        if (RegWrite_MEM && (rd_MEM != 0) && (rd_MEM == rs_EX))
+            forwardA = 2'b01;
+        if (RegWrite_MEM && (rd_MEM != 0) && (rd_MEM == rt_EX))
+            forwardB = 2'b01;
+        if (RegWrite_WB && (rd_WB != 0) && (rd_WB == rs_EX))
+            forwardA = 2'b10;
+        if (RegWrite_WB && (rd_WB != 0) && (rd_WB == rt_EX))
+            forwardB = 2'b10;
+    end
+endmodule
+
+// IF/ID Pipeline Register with Stall Handling
+module IF_ID(
+    input clk, rst, stall,
+    input [31:0] PCplus4_IF, Instr_IF,
+    output reg [31:0] PCplus4_ID, Instr_ID
+);
+    always @(posedge clk) begin
+        if (rst) begin
+            PCplus4_ID <= 0;
+            Instr_ID <= 0;
+        end else if (!stall) begin
+            PCplus4_ID <= PCplus4_IF;
+            Instr_ID <= Instr_IF;
+        end
+    end
+endmodule
+
+// ID Stage with Hazard Detection
+module ID_MIP(
+    input clk, rst,
+    input [31:0] instruction,
+    output reg [5:0] opcode,
+    output reg [4:0] rs, rt, rd,
+    output reg [15:0] immediate,
+    output reg [5:0] funct,
+    output stall
+);
+    wire hazard_detected;
+    Hazard_Detect_MIP hdu (.rs_ID(rs), .rt_ID(rt), .rt_EX(rd), .MemRead_EX(opcode == 6'b100011), .stall(hazard_detected));
+    
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            opcode <= 0;
+            rs <= 0;
+            rt <= 0;
+            rd <= 0;
+            immediate <= 0;
+            funct <= 0;
+        end else if (!hazard_detected) begin
+            opcode <= instruction[31:26];
+            rs <= instruction[25:21];
+            rt <= instruction[20:16];
+            rd <= instruction[15:11];
+            immediate <= instruction[15:0];
+            funct <= instruction[5:0];
+        end
+    end
+    assign stall = hazard_detected;
+endmodule
+
+// EX Stage with Forwarding
+module EX_MIP(
+    input clk, reset,
+    input [15:0] rs_data, rt_data, imm,
+    input [3:0] alu_op,
+    input alu_src,
+    input [1:0] forwardA, forwardB,
+    input [15:0] alu_result_wb, alu_result_mem,
+    output reg [15:0] alu_result, rt_data_out
+);
+    reg [15:0] operand_A, operand_B;
+    always @(*) begin
+        case (forwardA)
+            2'b00: operand_A = rs_data;
+            2'b01: operand_A = alu_result_mem;
+            2'b10: operand_A = alu_result_wb;
+            default: operand_A = rs_data;
+        endcase
+    end
+    always @(*) begin
+        case (forwardB)
+            2'b00: operand_B = rt_data;
+            2'b01: operand_B = alu_result_mem;
+            2'b10: operand_B = alu_result_wb;
+            default: operand_B = rt_data;
+        endcase
+    end
+    always @(*) begin
+        if (alu_src)
+            operand_B = imm;
+    end
+    always @(*) begin
+        case (alu_op)
+            4'b0000: alu_result = operand_A + operand_B;
+            4'b0001: alu_result = operand_A - operand_B;
+            4'b0010: alu_result = operand_A & operand_B;
+            4'b0011: alu_result = operand_A | operand_B;
+            4'b0100: alu_result = operand_A ^ operand_B;
+            4'b0101: alu_result = operand_A << 1;
+            4'b0110: alu_result = operand_A >> 1;
+            4'b0111: alu_result = (operand_A < operand_B) ? 16'b1 : 16'b0;
+            default: alu_result = 16'b0;
+        endcase
+    end
+    always @(posedge clk or posedge reset) begin
+        if (reset)
+            rt_data_out <= 16'b0;
+        else
+            rt_data_out <= rt_data;
+    end
+endmodule
+
+// MEM Stage
+module MEM_MIP(
+    input clk, rst, MemWrite, MemRead,
+    input [31:0] ALUResult_M, WriteData_M,
+    output reg [31:0] ReadData_M
+);
+    reg [7:0] data_mem [0:255];
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            ReadData_M <= 0;
+        end else begin
+            if (MemRead)
+                ReadData_M <= {data_mem[ALUResult_M], data_mem[ALUResult_M+1], data_mem[ALUResult_M+2], data_mem[ALUResult_M+3]};
+            if (MemWrite) begin
+                data_mem[ALUResult_M] <= WriteData_M[7:0];
+                data_mem[ALUResult_M+1] <= WriteData_M[15:8];
+                data_mem[ALUResult_M+2] <= WriteData_M[23:16];
+                data_mem[ALUResult_M+3] <= WriteData_M[31:24];
+            end
+        end
+    end
+endmodule
+
+// WB Stage
+module WB_MIP(
+    input [31:0] ReadData_WB, ALUResult_WB,
+    input [4:0] writereg_WB,
+    input RegWrite_WB, MemtoReg_WB,
+    output reg [31:0] WriteData,
+    output reg [4:0] WriteReg,
+    output reg RegWrite
+);
+    always @(*) begin
+        if (MemtoReg_WB)
+            WriteData = ReadData_WB;
+        else
+            WriteData = ALUResult_WB;
+        WriteReg = writereg_WB;
+        RegWrite = RegWrite_WB;
+    end
+endmodule
