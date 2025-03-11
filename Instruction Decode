@@ -1,14 +1,22 @@
 `timescale 1ns/1ns
 
-module InstructionDecode(
-    input clk, input rst,
+module ID_MIP(
+    input clk, 
+    input rst,
     input [31:0] instruction,
+    
+    // Hazard Detection Inputs
+    input MemRead_EX,       // Indicates if EX stage is reading from memory
+    input [4:0] rt_EX,      // Destination register of EX stage
+    output reg stall,       // Stall signal
+
+    // Instruction Decode Outputs
     output reg [5:0] opcode,
     output reg [4:0] rs, rt, rd,
     output reg [15:0] immediate,
     output reg [5:0] funct
 );
-    
+
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             opcode <= 0;
@@ -17,13 +25,24 @@ module InstructionDecode(
             rd <= 0;
             immediate <= 0;
             funct <= 0;
+            stall <= 0;
         end else begin
+            // Extract fields from instruction
             opcode <= instruction[31:26];
             rs <= instruction[25:21];
             rt <= instruction[20:16];
             rd <= instruction[15:11];
             immediate <= instruction[15:0];
             funct <= instruction[5:0];
+
+            // **Hazard Detection Logic**
+            // If the previous instruction is a memory read (load) and its destination register (rt_EX) matches
+            // either the source register (rs) or destination register (rt) of the current instruction, then stall
+            if (MemRead_EX && ((rt_EX == rs) || (rt_EX == rt))) begin
+                stall <= 1;
+            end else begin
+                stall <= 0;
+            end
         end
     end
 endmodule
