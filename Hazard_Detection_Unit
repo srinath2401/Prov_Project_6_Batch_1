@@ -1,0 +1,15 @@
+module Hazard_Detection_Unit(
+    input wire MemRead_EX,       // Load instruction in EX stage
+    input wire [4:0] rt_EX,      // Destination register in EX stage
+    input wire [4:0] rs_ID, rt_ID, // Source registers in ID stage
+    output reg stall
+);
+    
+    always @(*) begin
+        if (MemRead_EX && ((rt_EX == rs_ID) || (rt_EX == rt_ID))) 
+            stall = 1; // Stall if next instruction depends on a Load instruction
+        else 
+            stall = 0;
+    end
+
+endmodule
