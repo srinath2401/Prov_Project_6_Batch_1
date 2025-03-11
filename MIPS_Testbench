@@ -1,0 +1,147 @@
+`timescale 1ns/1ps
+
+module MIPS_Testbench;
+    reg clk, rst;
+    
+    // Inputs to Pipeline
+    reg [31:0] instruction;
+    reg MemWrite, MemRead, RegWrite, MemtoReg;
+    
+    // Outputs from Pipeline
+    wire stall;
+    wire [15:0] alu_result, operand_A, operand_B;
+    wire [31:0] mem_data_out, wb_data_out;
+
+    // Instantiate ID Stage (Includes Hazard Detection)
+    ID_MIP id_stage (
+        .clk(clk),
+        .rst(rst),
+        .instruction(instruction),
+        .stall(stall)
+    );
+
+    // Instantiate EX Stage (Includes Forwarding)
+    EX_MIP ex_stage (
+        .clk(clk),
+        .reset(rst),
+        .rs_data(16'h000A),
+        .rt_data(16'h0003),
+        .imm(16'h0004),
+        .alu_op(4'b0000), // ADD operation
+        .alu_src(0),
+        .forwardA(2'b00),
+        .forwardB(2'b00),
+        .alu_result_wb(16'h0010),
+        .alu_result_mem(16'h0005),
+        .alu_result(alu_result),
+        .rt_data_out(operand_B)
+    );
+
+    // Instantiate MEM Stage
+    MEM_MIP mem_stage (
+        .clk(clk),
+        .rst(rst),
+        .MemWrite(MemWrite),
+        .MemRead(MemRead),
+        .ALUResult_M(alu_result),
+        .WriteData_M(32'hDEADBEEF),
+        .ReadData_M(mem_data_out)
+    );
+
+    // Instantiate WB Stage
+    WB_MIP wb_stage (
+        .ReadData_WB(mem_data_out),
+        .ALUResult_WB(alu_result),
+        .writereg_WB(5'b00010),
+        .RegWrite_WB(RegWrite),
+        .MemtoReg_WB(MemtoReg),
+        .WriteData(wb_data_out),
+        .WriteReg(),
+        .RegWrite()
+    );
+
+    // Clock Generation
+    always #5 clk = ~clk;
+
+    initial begin
+        clk = 0;
+        rst = 1;
+        MemWrite = 0;
+        MemRead = 0;
+        RegWrite = 1;
+        MemtoReg = 0;
+        #10 rst = 0;
+
+        // **Test 1: Normal ADD Execution**
+        instruction = 32'b000000_01000_00011_00010_00000_100000; // ADD R2, R8, R3
+        #10;
+        $display("Test 1: Normal Execution");
+        $display("Time: %0t | Stall: %b | Operand_A: %h | Operand_B: %h | ALU_Result: %h", 
+                 $time, stall, ex_stage.operand_A, ex_stage.operand_B, alu_result);
+
+        // **Test 2: SUB Execution**
+        instruction = 32'b000000_01000_00011_00010_00000_100010; // SUB R2, R8, R3
+        #10;
+        $display("Test 2: SUB Execution");
+        $display("Time: %0t | ALU_Result: %h (Expected: A - 3)", $time, alu_result);
+
+        // **Test 3: Forwarding from MEM Stage**
+        instruction = 32'b000000_00010_00011_00010_00000_100000; // ADD R2, R2, R3
+        #10;
+        $display("Test 3: Forwarding from MEM Stage");
+        $display("Time: %0t | Operand_A: %h | Forwarded from MEM: %h", 
+                 $time, ex_stage.operand_A, ex_stage.alu_result_mem);
+
+        // **Test 4: Forwarding from WB Stage**
+        instruction = 32'b000000_00010_00011_00010_00000_100000; // ADD R2, R2, R3
+        #10;
+        $display("Test 4: Forwarding from WB Stage");
+        $display("Time: %0t | Operand_A: %h | Forwarded from WB: %h", 
+                 $time, ex_stage.operand_A, ex_stage.alu_result_wb);
+
+        // **Test 5: Load-Use Hazard (Stall Expected)**
+        instruction = 32'b100011_01000_00010_0000000000000100; // LW R2, 4(R8)
+        #10;
+        instruction = 32'b000000_00010_00011_00010_00000_100000; // ADD R2, R2, R3 (Should stall)
+        #10;
+        $display("Test 5: Load-Use Hazard (Stall Expected)");
+        $display("Time: %0t | Stall: %b (1=stall detected)", $time, stall);
+
+        // **Test 6: Memory Write Operation**
+        MemWrite = 1;
+        instruction = 32'b101011_01000_00010_0000000000000100; // SW R2, 4(R8)
+        #10;
+        MemWrite = 0;
+        MemRead = 1;
+        $display("Test 6: Memory Write and Read Operation");
+        $display("Time: %0t | Written Data: %h | Read Data: %h", 
+                 $time, 32'hDEADBEEF, mem_data_out);
+
+        // **Test 7: Shift Left Operation**
+        instruction = 32'b000000_01000_00000_00010_00000_000001; // SLL R2, R8, 1
+        #10;
+        $display("Test 7: Shift Left Operation");
+        $display("Time: %0t | ALU_Result: %h (Expected: R8 << 1)", $time, alu_result);
+
+        // **Test 8: Set Less Than**
+        instruction = 32'b000000_00010_00011_00010_00000_101010; // SLT R2, R2, R3
+        #10;
+        $display("Test 8: Set Less Than");
+        $display("Time: %0t | ALU_Result: %h (Expected: 1 if R2 < R3, else 0)", $time, alu_result);
+
+        // **Test 9: XOR Operation**
+        instruction = 32'b000000_01000_00011_00010_00000_100110; // XOR R2, R8, R3
+        #10;
+        $display("Test 9: XOR Operation");
+        $display("Time: %0t | ALU_Result: %h (Expected: R8 ^ R3)", $time, alu_result);
+
+        // **Test 10: OR Operation**
+        instruction = 32'b000000_01000_00011_00010_00000_100101; // OR R2, R8, R3
+        #10;
+        $display("Test 10: OR Operation");
+        $display("Time: %0t | ALU_Result: %h (Expected: R8 | R3)", $time, alu_result);
+
+        #100;
+        $stop;
+    end
+endmodule
