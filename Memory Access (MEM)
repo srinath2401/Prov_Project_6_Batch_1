@@ -1,6 +1,6 @@
 `timescale 1ns/1ns
 
-module MemoryStage(
+module MEM_MIP(
     input clk,
     input rst,
     input MemWrite,
@@ -17,14 +17,14 @@ module MemoryStage(
             ReadData_M <= 0;
         end else begin
             if (MemRead) begin
-                ReadData_M <= {data_mem[ALUResult_M], data_mem[ALUResult_M+1], 
-                               data_mem[ALUResult_M+2], data_mem[ALUResult_M+3]};
+                ReadData_M <= {data_mem[ALUResult_M & ~32'h3], data_mem[(ALUResult_M & ~32'h3)+1], 
+                               data_mem[(ALUResult_M & ~32'h3)+2], data_mem[(ALUResult_M & ~32'h3)+3]};
             end
             if (MemWrite) begin
-                data_mem[ALUResult_M] <= WriteData_M[7:0];
-                data_mem[ALUResult_M+1] <= WriteData_M[15:8];
-                data_mem[ALUResult_M+2] <= WriteData_M[23:16];
-                data_mem[ALUResult_M+3] <= WriteData_M[31:24];
+                data_mem[ALUResult_M & ~32'h3]   <= WriteData_M[7:0];
+                data_mem[(ALUResult_M & ~32'h3)+1] <= WriteData_M[15:8];
+                data_mem[(ALUResult_M & ~32'h3)+2] <= WriteData_M[23:16];
+                data_mem[(ALUResult_M & ~32'h3)+3] <= WriteData_M[31:24];
             end
         end
     end
