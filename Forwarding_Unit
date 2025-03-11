@@ -1,0 +1,25 @@
+module Forwarding_Unit(
+    input wire [4:0] rs_EX, rt_EX,  // Source registers in EX stage
+    input wire [4:0] rd_MEM, rd_WB, // Destination registers in MEM & WB stage
+    input wire RegWrite_MEM, RegWrite_WB, // Register writes in MEM & WB
+    output reg [1:0] forwardA, forwardB
+);
+    
+    always @(*) begin
+        // Forward from MEM stage
+        if (RegWrite_MEM && (rd_MEM != 0) && (rd_MEM == rs_EX))
+            forwardA = 2'b01;
+        else if (RegWrite_WB && (rd_WB != 0) && (rd_WB == rs_EX))
+            forwardA = 2'b10;
+        else
+            forwardA = 2'b00;
+
+        if (RegWrite_MEM && (rd_MEM != 0) && (rd_MEM == rt_EX))
+            forwardB = 2'b01;
+        else if (RegWrite_WB && (rd_WB != 0) && (rd_WB == rt_EX))
+            forwardB = 2'b10;
+        else
+            forwardB = 2'b00;
+    end
+
+endmodule
